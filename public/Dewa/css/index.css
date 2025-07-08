@@ -1,0 +1,45 @@
+
+
+.hero-section {
+    background-color: #f2f2f2;
+    height: 90vh;
+    align-content: center;
+}
+
+.hero-heading {
+    color: #1B4841;
+    /* color: whitesmoke; */
+    font-size: 75px;
+    font-weight: bold;
+}
+
+input {
+    border-radius: 20px !important;
+    padding: 0px 20px 0px 20px;
+    /* font-size: 15px; */
+    outline: none;
+}
+
+.container-button{
+    display: flex !important;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px !important;
+    .my-button {
+        font-size: 15px;
+        /* border-color: rgba(242, 194, 85, 1, 0%); */
+        padding: 6px 20px 6px 20px;
+        border-radius: 10px;
+        background: rgba(242, 194, 85, 1);
+        border: none;
+    }
+}
+
+.my-button-2 {
+    font-size: 15px;
+    color: #f2f2f2;
+    /* border-color: rgba(242, 194, 85, 1, 0%); */
+    padding: 6px 20px 6px 20px;
+    border-radius: 15px;
+    background: #1B4841
+}
