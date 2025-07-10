@@ -8,7 +8,7 @@ export default defineConfig({
     plugins: [
         laravel({
             // Update the input path to your new .scss file
-            input: ['resources/css/app.scss', 'resources/js/app.js'], 
+            input: ['resources/css/app.scss', 'resources/sass/app.scss', 'resources/js/app.js'], 
             refresh: true,
         }),
     ],

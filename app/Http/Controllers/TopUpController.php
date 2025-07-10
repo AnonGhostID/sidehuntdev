@@ -108,15 +108,15 @@ class TopUpController extends Controller
 
         switch ($payment->status) {
             case 'pending':
-                return view('manajemen.keuangan.topup', compact('payment'))->with(['view_type' => 'waiting']);
+                return view('manajemen.keuangan.topUp', compact('payment'))->with(['view_type' => 'waiting']);
             
             case 'completed':
-                return view('manajemen.keuangan.topup', compact('payment'))->with(['view_type' => 'success']);
+                return view('manajemen.keuangan.topUp', compact('payment'))->with(['view_type' => 'success']);
             
             case 'failed':
             case 'expired':
             case 'cancelled':
-                return view('manajemen.keuangan.topup', compact('payment'))->with(['view_type' => 'failed']);
+                return view('manajemen.keuangan.topUp', compact('payment'))->with(['view_type' => 'failed']);
             
             default:
                 return redirect()->route('manajemen.topUp')

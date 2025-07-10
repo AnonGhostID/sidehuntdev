@@ -87,7 +87,7 @@ class HomeController extends Controller
         } else {
             $active_navbar = 'Login';
             $nama_halaman = 'Login';
-            return view('Dewa.Login', compact('active_navbar', 'nama_halaman'));
+            return view('Dewa.login', compact('active_navbar', 'nama_halaman'));
         }
     }
 
