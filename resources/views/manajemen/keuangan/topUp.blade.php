@@ -331,6 +331,30 @@ let isTabActive = true;
 let checkingStatus = false; // Prevent multiple simultaneous requests
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Check if payment is already expired before starting countdown
+    const now = new Date().getTime();
+    const paymentCreatedAt = new Date('{{ $payment->created_at->toISOString() }}').getTime();
+    const invoiceDuration = {{ session('invoice_duration', 120) }} * 1000; // Convert to milliseconds
+    const expiryTime = paymentCreatedAt + invoiceDuration;
+    
+    if (now >= expiryTime) {
+        // Payment is already expired, show expired state immediately
+        paymentCompleted = true;
+        const paymentIcon = document.getElementById('payment-icon');
+        paymentIcon.className = "mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-4";
+        paymentIcon.innerHTML = '<i class="fas fa-exclamation-triangle text-red-600 text-2xl"></i>';
+        
+        document.getElementById('payment-title').textContent = 'Pembayaran Kedaluwarsa';
+        document.getElementById('payment-subtitle').textContent = 'Waktu pembayaran telah habis. Silakan buat transaksi baru.';
+        document.getElementById('countdown').textContent = 'Kedaluwarsa';
+        document.getElementById('payment-status').innerHTML = "Kedaluwarsa";
+        document.getElementById('payment-status').className = "font-semibold text-lg text-red-600";
+        
+        showMessage('error', 'Pembayaran telah kedaluwarsa!');
+        expireInvoiceOnTimeout();
+        return;
+    }
+    
     startCountdown();
     startAutoCheck();
     
@@ -346,7 +370,10 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function startCountdown() {
-    const expiryTime = new Date('{{ $payment->created_at }}').getTime() + ({{ session('invoice_duration') }} * 1000);
+    // Calculate expiry time based on payment creation time and invoice duration
+    const paymentCreatedAt = new Date('{{ $payment->created_at->toISOString() }}').getTime();
+    const invoiceDuration = {{ session('invoice_duration', 120) }} * 1000; // Convert to milliseconds
+    const expiryTime = paymentCreatedAt + invoiceDuration;
 
     countdownInterval = setInterval(function() {
         const now = new Date().getTime();

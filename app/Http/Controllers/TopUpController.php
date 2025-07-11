@@ -19,7 +19,13 @@ class TopUpController extends Controller
     public function __construct()
     {
         // $this->middleware('auth');
-        Configuration::setXenditKey('xnd_development_7Qgujm27QHHqpc15olW28d1yBzncI1f1KLHSGNMwGeRug2K6doSB426KYqvgEa');
+        $apiKey = env('XENDIT_API_KEY', 'xnd_development_7Qgujm27QHHqpc15olW28d1yBzncI1f1KLHSGNMwGeRug2K6doSB426KYqvgEa');
+        
+        if (empty($apiKey)) {
+            throw new \Exception('Xendit API key is not configured. Please set XENDIT_API_KEY in your environment.');
+        }
+        
+        Configuration::setXenditKey($apiKey);
         $this->apiInstance = new InvoiceApi();
     }
 
@@ -148,63 +154,86 @@ class TopUpController extends Controller
         try {
             $result = $this->apiInstance->getInvoices(null, $external_id);
             
-            if (!empty($result)) {
-                $xenditStatus = strtolower($result[0]['status']);
-                
-                return DB::transaction(function () use ($payment, $xenditStatus, $result) {
-
-                    $lockedPayment = FinancialTransaction::where('id', $payment->id)->lockForUpdate()->first();
-                    $previousStatus = $lockedPayment->status;
-                    
-                    $paymentMethod = null;
-                    
-                    if (isset($result[0]['payment_method'])) {
-                        $paymentMethod = $result[0]['payment_method'];
-                    } elseif (isset($result[0]['payment_channel'])) {
-                        $paymentMethod = $result[0]['payment_channel'];
-                    } elseif (isset($result[0]['payment_destination'])) {
-                        $paymentMethod = $result[0]['payment_destination'];
-                    } elseif (isset($result[0]['bank_code'])) {
-                        $paymentMethod = $result[0]['bank_code'];
-                    } elseif (isset($result[0]['payment_details']['payment_method'])) {
-                        $paymentMethod = $result[0]['payment_details']['payment_method'];
-                    }
-                    
-                    $updateData = ['status' => $this->mapXenditStatus($xenditStatus)];
-                    if ($paymentMethod) {
-                        $updateData['method'] = $paymentMethod;
-                    }
-                    
-                    $lockedPayment->update($updateData);
-                    
-                    if (($xenditStatus === 'paid' || $xenditStatus === 'settled') && 
-                        ($previousStatus !== 'completed')) {
-                        
-                        $user = $lockedPayment->user;
-                        $user->increment('dompet', $lockedPayment->amount);
-                        
-                        // Update session with fresh user data
-                        $freshUser = $user->fresh();
-                        session(['account' => $freshUser]);
-                        
-                        return response()->json([
-                            'status' => 'success',
-                            'message' => 'Pembayaran berhasil! Saldo Anda telah ditambahkan.',
-                            'new_balance' => $freshUser->dompet
-                        ]);
-                    }
-                    
-                    return response()->json([
-                        'status' => $xenditStatus,
-                        'message' => $this->getStatusMessage($xenditStatus)
-                    ]);
-                });
+            if (empty($result)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Invoice tidak ditemukan di sistem pembayaran.'
+                ], 404);
             }
             
-        } catch (\Exception $e) {
+            $xenditStatus = strtolower($result[0]['status']);
+            
+            return DB::transaction(function () use ($payment, $xenditStatus, $result) {
+
+                $lockedPayment = FinancialTransaction::where('id', $payment->id)->lockForUpdate()->first();
+                $previousStatus = $lockedPayment->status;
+                
+                $paymentMethod = null;
+                
+                if (isset($result[0]['payment_method'])) {
+                    $paymentMethod = $result[0]['payment_method'];
+                } elseif (isset($result[0]['payment_channel'])) {
+                    $paymentMethod = $result[0]['payment_channel'];
+                } elseif (isset($result[0]['payment_destination'])) {
+                    $paymentMethod = $result[0]['payment_destination'];
+                } elseif (isset($result[0]['bank_code'])) {
+                    $paymentMethod = $result[0]['bank_code'];
+                } elseif (isset($result[0]['payment_details']['payment_method'])) {
+                    $paymentMethod = $result[0]['payment_details']['payment_method'];
+                }
+                
+                $updateData = ['status' => $this->mapXenditStatus($xenditStatus)];
+                if ($paymentMethod) {
+                    $updateData['method'] = $paymentMethod;
+                }
+                
+                $lockedPayment->update($updateData);
+                
+                if (($xenditStatus === 'paid' || $xenditStatus === 'settled') && 
+                    ($previousStatus !== 'completed')) {
+                    
+                    $user = $lockedPayment->user;
+                    $user->increment('dompet', $lockedPayment->amount);
+                    
+                    // Update session with fresh user data
+                    $freshUser = $user->fresh();
+                    session(['account' => $freshUser]);
+                    
+                    return response()->json([
+                        'status' => 'success',
+                        'message' => 'Pembayaran berhasil! Saldo Anda telah ditambahkan.',
+                        'new_balance' => $freshUser->dompet
+                    ]);
+                }
+                
+                return response()->json([
+                    'status' => $xenditStatus,
+                    'message' => $this->getStatusMessage($xenditStatus)
+                ]);
+            });
+            
+        } catch (\Xendit\XenditSdkException $e) {
+            Log::error('Xendit API error during payment status check', [
+                'external_id' => $external_id,
+                'error' => $e->getMessage(),
+                'user_id' => Auth::id(),
+                'response_code' => $e->getCode()
+            ]);
+            
             return response()->json([
                 'status' => 'error',
-                'message' => 'Gagal mengecek status pembayaran: ' . $e->getMessage()
+                'message' => 'Gagal mengecek status pembayaran. Silakan coba lagi.'
+            ], 500);
+        } catch (\Exception $e) {
+            Log::error('Payment status check failed', [
+                'external_id' => $external_id,
+                'error' => $e->getMessage(),
+                'user_id' => Auth::id()
+            ]);
+            
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal mengecek status pembayaran. Silakan coba lagi.'
             ], 500);
         }
         
