@@ -21,8 +21,18 @@ class TopUpController extends Controller
         // $this->middleware('auth');
         $apiKey = env('XENDIT_API_KEY', 'xnd_development_7Qgujm27QHHqpc15olW28d1yBzncI1f1KLHSGNMwGeRug2K6doSB426KYqvgEa');
         
+        // Trim whitespace from API key
+        $apiKey = trim($apiKey);
+        
         if (empty($apiKey)) {
             throw new \Exception('Xendit API key is not configured. Please set XENDIT_API_KEY in your environment.');
+        }
+        
+        // Validate API key format
+        if (!preg_match('/^xnd_(development_|production_)[A-Za-z0-9]+$/', $apiKey)) {
+            Log::warning('Invalid Xendit API key format', [
+                'api_key_prefix' => substr($apiKey, 0, 20) . '...'
+            ]);
         }
         
         Configuration::setXenditKey($apiKey);
@@ -133,6 +143,14 @@ class TopUpController extends Controller
     public function checkStatus(Request $request)
     {
         $external_id = $request->external_id;
+        
+        // Add debugging for API key
+        Log::info('Payment status check initiated', [
+            'external_id' => $external_id,
+            'user_id' => Auth::id(),
+            'api_key_prefix' => substr(env('XENDIT_API_KEY', 'fallback'), 0, 20) . '...'
+        ]);
+        
         $query = FinancialTransaction::where('external_id', $external_id);
         
         if (Auth::user()->isAdmin != 1) {
@@ -217,18 +235,28 @@ class TopUpController extends Controller
                 'external_id' => $external_id,
                 'error' => $e->getMessage(),
                 'user_id' => Auth::id(),
-                'response_code' => $e->getCode()
+                'response_code' => $e->getCode(),
+                'full_error' => $e->getFullError()
             ]);
+            
+            // Provide more specific error messages for debugging
+            $errorMessage = 'Gagal mengecek status pembayaran. Silakan coba lagi.';
+            if (strpos($e->getMessage(), 'Could not resolve host') !== false) {
+                $errorMessage = 'Tidak dapat terhubung ke server pembayaran. Periksa koneksi internet Anda.';
+            } elseif (strpos($e->getMessage(), 'API Key') !== false || strpos($e->getMessage(), 'Unauthorized') !== false) {
+                $errorMessage = 'Konfigurasi API key tidak valid. Silakan hubungi administrator.';
+            }
             
             return response()->json([
                 'status' => 'error',
-                'message' => 'Gagal mengecek status pembayaran. Silakan coba lagi.'
+                'message' => $errorMessage
             ], 500);
         } catch (\Exception $e) {
             Log::error('Payment status check failed', [
                 'external_id' => $external_id,
                 'error' => $e->getMessage(),
-                'user_id' => Auth::id()
+                'user_id' => Auth::id(),
+                'trace' => $e->getTraceAsString()
             ]);
             
             return response()->json([
